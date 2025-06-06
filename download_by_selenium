@@ -1,0 +1,128 @@
+# 这个是在百度、谷歌浏览器下载图片，运行命令：python ./download_by_selenium.py ./key_words.txt
+# key_words.txt是关键词，一行一个关键词
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import StaleElementReferenceException  # 导入异常类型
+import time
+import os
+import sys
+import requests
+
+def download_image(url, save_path):
+    response = requests.get(url)
+    if response.status_code == 200:
+        if len(response.content) < 10 * 1024: # 10K 以下的图片去掉
+            return
+        with open(save_path, 'wb') as f:
+            f.write(response.content)
+        # print(f"Image saved as {save_path}")
+    # else:
+    #     print(f"Failed to retrieve image from {url}")
+
+def fetch_image_urls(search_query, search_engine="bing"):
+    if search_engine == "baidu":
+        search_url = f"https://image.baidu.com/search/index?tn=baiduimage&word={search_query}"
+    elif search_engine == "bing":
+        search_url = f"https://www.bing.com/images/search?q={search_query}"
+    elif search_engine == "google":
+        search_url = f"https://www.google.com/search?q={search_query}&tbm=isch"
+        # https://www.google.com.hk/search?q=%E6%89%93%E7%BD%91%E7%90%83&hl=zh-CN&sclient=img&udm=2
+    else:
+        raise ValueError("Unsupported search engine")
+
+    driver = webdriver.Chrome()
+    driver.get(search_url)
+    time.sleep(3)  # 等待页面加载
+
+    # 滚动页面到底部
+    last_height = driver.execute_script("return document.body.scrollHeight")  # 获取当前页面高度
+    n = 30
+    while n > 0:
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")  # 动到页面底部
+        time.sleep(1)  # 等待页面加载新内容
+        new_height = driver.execute_script("return document.body.scrollHeight")  # 获取新的页面高度
+        if new_height == last_height:  # 如果页面高度没有变化，说明已经到底部
+            break
+        last_height = new_height
+        n -= 1
+
+    img_urls = []
+    wait = WebDriverWait(driver, 10)
+    img_elements = wait.until(EC.presence_of_all_elements_located((By.TAG_NAME, 'img')))
+    for img in img_elements:
+        try:
+            src = img.get_attribute('src')
+            if src:
+                img_urls.append(src)
+        except StaleElementReferenceException:
+            # 如果元素失效，重新定位
+            try:
+                img = wait.until(EC.presence_of_element_located((By.XPATH, f"//img[@src='{src}']")))
+                src = img.get_attribute('src')
+                if src:
+                    img_urls.append(src)
+            except Exception as e:
+                pass
+    driver.quit()
+    return img_urls
+
+def download_image_by_keyword(keyword_path):
+
+    with open(keyword_path, 'r', encoding='utf-8') as file:
+        keywords = [line.strip() for line in file if line.strip()]
+    
+    keywords = list(set(keywords))
+    for i, keyword in enumerate(keywords):
+        print(f'共 {len(keywords)} 个，正在处理第 {i} 个： {keyword}')
+        process_keyword(keyword, search_engine="bing")
+        process_keyword(keyword, search_engine="baidu")
+        # process_keyword(keyword, search_engine="google")
+        
+
+def process_keyword(keyword, search_engine="bing"):
+    dir_name = keyword.replace(' ', '-').replace('\'', '-').replace('"', '-')
+    save_dir = os.path.join('scene', dir_name)
+    if os.path.exists(save_dir):
+        if len(os.listdir(save_dir)) > 500:
+            print('已存在, 跳过:', keyword)
+            return
+    os.makedirs(save_dir, exist_ok=True)
+    image_urls = fetch_image_urls(keyword, search_engine=search_engine)
+    for i, img_url in enumerate(image_urls):
+        path = get_save_path(save_dir, i)
+        try:
+            download_image(img_url, path)
+        except Exception as e:
+            # print(43, e)
+            pass
+        # time.sleep(1.5)
+
+def get_save_path(save_dir, index):
+    path = os.path.join(save_dir, f'image_{index}.jpg')
+    while os.path.exists(path):
+        index += 1000
+        path = os.path.join(save_dir, f'image_{index}.jpg')
+    return path
+
+if __name__ == '__main__':
+    if len(sys.argv) == 1:
+        # 测试
+        #search_query = "打橄榄球"
+        search_query = "play rugby"
+        search_query = "driver's license"
+        dir_name = search_query.replace(' ', '-').replace('\'', '-').replace('"', '-')
+        save_dir = os.path.join('scene', dir_name)
+        os.makedirs(save_dir, exist_ok=True)
+        image_urls = fetch_image_urls(search_query, search_engine="bing")
+        for i, img_url in enumerate(image_urls):
+            path = os.path.join(save_dir, f'image_{i}.jpg')
+            try:
+                download_image(img_url, path)
+            except Exception as e:
+                print(43, e)
+    elif len(sys.argv) == 2:
+        # 批量处理
+        keyword_path = sys.argv[1]
+        download_image_by_keyword(keyword_path)
