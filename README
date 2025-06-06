@@ -1,3 +1,41 @@
 1. 必要安装pillow， pip install -r requirements.txt
 2. 打开main.py，配置各个图片网站cookies（浏览器F12查看）
-3. 配置搜索关键词，输出文件夹
+3. 配置搜索关键词，输出文件
+
+思路步骤
+1、首先浏览器F12查看，获取原始网页的URL、Cookie。
+URL刚开始未原始的网页地址
+Cookie的获取将Application下的第一列等于第二列，运行python spider/cookie.py
+2、建立初步的连接，获取网页的html文件
+url = "https://www.xiaohongshu.com/explore"
+headers = {
+     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+     "Accept-Language": "en-US,en;q=0.9",
+     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+     "Cookie": "a1=1943e61f6e7en6b1pnvmrwjhojoxylyavbkki613e50000305308; abRequestId=a211f522-eab4-5b07-aeed-133cb55daea8; acw_tc=0a00d0cf17476431054028137ebda92eec7599c72cde0c245ef0041555f477; www.xiaohongshu.com=/; acw_tc=0ad597f217476449122078221e5c3f78441ff3610d2dde907f001a8c0748f4; edith.xiaohongshu.com=/; gid=yj4qdKJf0Whyyj4qdKyiKDKydWdIKDyUIh6FTqdEVxlVlT28Cv1v03888q82q8Y8y4q440W0; loadts=1747644194868; sec_poison_id=457f2007-3aab-4eff-a293-e9fe6a98c2db; unread={%22ub%22:%2268155dab000000002300c6ee%22%2C%22ue%22:%22680b8a5b0000000009017184%22%2C%22uc%22:20}; webBuild=4.62.3; webId=d352966e76523cec3da807726a891a05; web_session=040069b14335f85610bf9fcb49354b373e459a; websectiga=9730ffafd96f2d09dc024760e253af6ab1feb0002827740b95a255ddf6847fc8; xsecappid=xhs-pc-web",
+     "Referer": "https://www.xiaohongshu.com",
+     "sec-ch-ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+      "sec-fetch-dest": "document",
+      "sec-fetch-mode": "navigate",
+      "sec-fetch-site": "same-origin",
+      "sec-fetch-user": "?1"
+}
+# 建立连接
+sess = requests.session()
+resp = sess.get(
+                    url=url,
+                    headers=headers,
+                )
+                
+if resp.status_code != 200:
+    print(f"请求失败: {resp.status_code}")
+else:
+    print("请求成功")
+    # 下载网页的HTML内容
+    html_content = resp.text
+    with open('xiaohongshu.html', 'w', encoding='utf-8') as f:
+        f.write(html_content)
+    print("网页内容已保存为xiaohongshu.html")
+3、解析html文件，提取所需要下载的逻辑，可先在F12的Elements中找到所需要的数据存放的位置，在添加解析逻辑提取所需数据
+4、下载数据，注意添加间隔时间，避免过度访问
+5、如需不同的关键词，在连接时主要更新URL
