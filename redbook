@@ -1,0 +1,99 @@
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.chrome.options import Options
+import time
+import os
+from bs4 import BeautifulSoup
+from urllib.parse import quote
+import random
+
+def download_txt(url, keys, output_root):
+    # 配置Chrome选项
+    chrome_options = Options()
+    # chrome_options.add_argument('--headless')  # 暂时注释掉无头模式便于调试
+    chrome_options.add_argument('--disable-gpu')
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--disable-dev-shm-usage')
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+    driver = webdriver.Chrome(options=chrome_options)
+    wait = WebDriverWait(driver, 10)  # 设置显式等待
+    
+    try:
+        for key in keys:
+            print(f"搜索关键词: {key}")
+            dst_folder = os.path.join(output_root, key)
+            os.makedirs(dst_folder, exist_ok=True)
+
+            encoded_key = quote(key)
+            url_key = f"https://www.xiaohongshu.com/search_result?keyword={encoded_key}&source=web_explore_feed"
+            print(f"访问URL: {url_key}")
+
+            driver.get(url_key)
+            time.sleep(5)  # 增加初始等待时间
+
+            # 执行10次下滑，改变下滑次数可以增加或减少加载的内容，10次大概35条标题
+            for i in range(10):
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(2)  # 增加每次滑动后的等待时间
+                print(f"已完成第{i+1}次下滑")
+
+            # 获取页面内容并打印调试信息
+            html_content = driver.page_source
+            print("页面内容长度:", len(html_content))
+            
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # 尝试多种选择器
+            selectors = [
+                {'data-v-a264b01a': True, 'data-v-51ec0135': True},
+                {'class': 'title'},
+                {'class': 'footer'},
+                {'class': 'content'}
+            ]
+            
+            all_texts = []
+            for selector in selectors:
+                if 'class' in selector:
+                    elements = soup.find_all(class_=selector['class'])
+                else:
+                    elements = soup.find_all('span', attrs=selector)
+                
+                if elements:
+                    print(f"使用选择器 {selector} 找到 {len(elements)} 个元素")
+                    for elem in elements:
+                        text = elem.get_text().strip()
+                        if text:
+                            all_texts.append(text)
+
+            if all_texts:
+                save_path = os.path.join(dst_folder, f"{key}.txt")
+                with open(save_path, 'w', encoding='utf-8') as f:
+                    for text in all_texts:
+                        f.write(text + '\n')
+                print(f"成功保存 {len(all_texts)} 条内容到 {save_path}")
+            else:
+                print("未找到任何匹配内容")
+                # 保存页面源码以供分析
+                debug_path = os.path.join(dst_folder, f"{key}_debug.html")
+                with open(debug_path, 'w', encoding='utf-8') as f:
+                    f.write(html_content)
+                print(f"已保存调试页面到 {debug_path}")
+
+            time.sleep(random.uniform(2, 4))
+
+    except Exception as e:
+        print(f"发生错误: {str(e)}")
+    finally:
+        driver.quit()
+
+if __name__ == "__main__":
+    keys = ["串珠手链", "手链", "手镯", "项链", "耳环"]
+    output_root = "xiaohongshu"
+    os.makedirs(output_root, exist_ok=True)
+    
+    url = "https://www.xiaohongshu.com/explore"
+    download_txt(url, keys, output_root)
